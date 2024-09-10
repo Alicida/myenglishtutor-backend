@@ -44,7 +44,7 @@ def transcribe_speech(content):
     audio = speech.RecognitionAudio(content=content)
 
     config = speech.RecognitionConfig(
-        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
         sample_rate_hertz=48000,
         language_code="es-MX",
         model="default",
@@ -53,7 +53,11 @@ def transcribe_speech(content):
         alternative_language_codes=["en-US"],
     )
 
-    response = client.recognize(config=config, audio=audio)
+    # Utiliza long_running_recognize para audio de larga duración
+    operation = client.long_running_recognize(config=config, audio=audio)
+
+    print("Esperando a que la operación se complete...")
+    response = operation.result(timeout=90)  # Espera hasta 90 segundos
 
     transcript = ""
     for result in response.results:
@@ -95,6 +99,13 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
 
     content = await audio_file.read()  # Lee el contenido del archivo de audio
 
+    # Guarda el audio recibido en un archivo temporal
+    ruta_archivo = os.path.join(os.getcwd(), "audio_recibido.wav")
+    with open(ruta_archivo, "wb") as f:
+        f.write(content)
+
+    print("Tamaño del archivo guardado:", os.path.getsize(ruta_archivo))
+
     # Llama a la función transcribe_speech para obtener la transcripcion
     transcript = transcribe_speech(content)
 
@@ -113,11 +124,11 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
         "top_p": 0.8,
         "top_k": 40
     }
-    # Incluye los errores gramaticales en el prompt para PaLM 2
-    prompt = f"Eres un profesor de inglés. El usuario dijo: '{transcript}'. "
-    if errors:
-        prompt += "Errores gramaticales: " + ", ".join(errors) + ". "
-    prompt += "Corrige los errores y proporciona una explicación. La explicación debe ser en un lenguaje natural y escrita en inglés. Continua la converesación o preguntame acerca de los errores que tuve."
+    prompt = f"""You are an English teacher. The user said: '{transcript}'. 
+    If there are any grammatical errors, correct them and provide an explanation in natural language, written in English. 
+    Continue the conversation or ask me about the errors the user made. 
+    If what the user said doesn't make sense, try to deduce what they meant. 
+    Please format your response as a single paragraph without using any bullet points or asterisks."""
     response = model.predict(prompt, **parameters)
     response_text = response.text
     print("Respuesta de PaLM 2:", response_text)
