@@ -9,6 +9,7 @@ RUN pip install -r /app/requirements.txt
 
 COPY . /app
 
-EXPOSE 8000
+# No expongas un puerto específico aquí
+# EXPOSE 8000 
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$PORT"]  # Usa la variable de entorno PORT
