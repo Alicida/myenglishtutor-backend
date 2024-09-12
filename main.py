@@ -160,3 +160,10 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
 
     print("Enviando respuesta al frontend...")
     return {"audio_path": "/static/response.wav"}
+
+# Obtiene el puerto de la variable de entorno PORT
+port = int(os.environ.get("PORT", 8080))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
