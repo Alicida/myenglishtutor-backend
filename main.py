@@ -14,7 +14,8 @@ app = FastAPI()
 
 # ----> CONFIGURACIÓN DE CORS <----
 origins = [
-    "http://localhost:3000"  # Origen del frontend en localhost
+    "http://localhost:3000",  # Origen del frontend en localhost
+    "https://myenglishtutor-271678354785.us-central1.run.app"  # Origen del frontend en Cloud Run
 ]
 
 app.add_middleware(
