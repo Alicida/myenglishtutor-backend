@@ -22,7 +22,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["POST"],
     allow_headers=["*"],
 )
 # ----> FIN DE LA CONFIGURACIÓN DE CORS <----
@@ -31,9 +31,6 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # ----> FIN DE LA CONFIGURACIÓN DE LOGGING <----
-
-# Monta el directorio "static" para archivos estáticos
-app.mount("/static", StaticFiles(directory="build"), name="static")
 
 # ----> CONFIGURACIÓN DE VERTEX AI <----
 vertexai.init(project="hotline-434020", location="us-central1") # Reemplaza con tu proyecto y ubicación
@@ -156,8 +153,18 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
     )
 
     # Guarda el audio generado en el directorio "static"
-    with open("build/response.wav", "wb") as out:
+    with open("build/static/response.wav", "wb") as out:
         out.write(response.audio_content)
 
     print("Enviando respuesta al frontend...")
     return {"audio_path": "/static/response.wav"}
+
+# Monta el directorio "static" para archivos estáticos
+app.mount("/", StaticFiles(directory="build", html=True), name="static")
+
+# Obtiene el puerto de la variable de entorno PORT
+port = int(os.environ.get("PORT", 8080))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
