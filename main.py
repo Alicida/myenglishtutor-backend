@@ -15,7 +15,7 @@ app = FastAPI()
 # ----> CONFIGURACIÓN DE CORS <----
 origins = [
     "http://localhost:3000",  # Origen del frontend en localhost
-    "https://myenglishtutor-271678354785.us-central1.run.app:3000"  # Origen del frontend en Cloud Run
+    "https://myenglishtutor-271678354785.us-central1.run.app"  # Origen del frontend en Cloud Run
 ]
 
 app.add_middleware(
@@ -44,11 +44,11 @@ def transcribe_speech(content):
     config = speech.RecognitionConfig(
         encoding=speech.RecognitionConfig.AudioEncoding.WEBM_OPUS,
         sample_rate_hertz=48000,
-        language_code="es-MX",
+        language_code="en-US",
         model="default",
         audio_channel_count=1,
         enable_word_time_offsets=True,
-        alternative_language_codes=["en-US"],
+        alternative_language_codes=["es-MX"],
     )
 
     # Utiliza long_running_recognize para audio de larga duración
@@ -89,6 +89,25 @@ def detect_language(text):
     return result['language']
 # ----> FIN DE LA FUNCIÓN PARA DETECTAR IDIOMA <----
 
+# ----> FUNCIÓN PARA ANALIZAR LA FLUIDEZ CON NATURAL LANGUAGE API <----
+def analyze_fluency(text):
+    client = language_v1.LanguageServiceClient()
+    document = language_v1.Document(content=text, type_=language_v1.Document.Type.PLAIN_TEXT)
+
+    # Realiza el análisis de sentimiento
+    sentiment_response = client.analyze_sentiment(request={'document': document})
+    sentiment_score = sentiment_response.document_sentiment.score
+
+    # Define un umbral para la puntuación de sentimiento
+    fluency_threshold = 0.2  # Ajusta este valor según sea necesario
+
+    # Imprime información de depuración
+    print("Puntuación de sentimiento:", sentiment_score)
+
+    # Devuelve True si el sentimiento es negativo o neutral (baja fluidez), False en caso contrario
+    return sentiment_score <= fluency_threshold
+# ----> FIN DE LA FUNCIÓN PARA ANALIZAR LA FLUIDEZ <----
+
 @app.post("/transcribe/")
 async def transcribe_audio(request: Request, audio_file: UploadFile = File(...)):
     print("Recibiendo audio...")
@@ -114,6 +133,10 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
             print(error)
     # ----> FIN DEL ANÁLISIS DE GRAMÁTICA <----
 
+    # ----> ANÁLISIS DE FLUIDEZ <----
+    is_low_fluency = analyze_fluency(transcript)
+    # ----> FIN DEL ANÁLISIS DE FLUIDEZ <----
+
     # ---->  AQUÍ VA LA LÓGICA PARA GENERAR LA RESPUESTA CON PALM 2 <----
     model = TextGenerationModel.from_pretrained("text-bison")
     parameters = {
@@ -122,11 +145,19 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
         "top_p": 0.8,
         "top_k": 40
     }
-    prompt = f"""You are an English teacher. The user said: '{transcript}'. 
-    If there are any grammatical errors, correct them and provide an explanation in natural language, written in English. 
-    Continue the conversation or ask me about the errors the user made. 
-    If what the user said doesn't make sense, try to deduce what they meant. 
-    Please format your response as a single paragraph without using any bullet points or asterisks."""
+    
+    if is_low_fluency:
+        prompt = """It seems like you might have had some trouble expressing yourself. 
+        Could you please repeat that last sentence? I want to make sure I understand you correctly."""
+    else:
+        prompt = f"""You are a friendly and helpful English tutor. 
+        The user just said: '{transcript}'. 
+        Respond in a natural and conversational way, as if you were talking to a friend learning English. 
+        Don't worry too much about correcting punctuation or grammatical errors, like capital letters. 
+        Focus on understanding the user's meaning and encouraging them to practice their English. 
+        Try to continue the conversation. 
+        Never mention that you are an AI language model or that you can't speak or have conversations."""
+    
     response = model.predict(prompt, **parameters)
     response_text = response.text
     print("Respuesta de PaLM 2:", response_text)
@@ -157,9 +188,9 @@ async def transcribe_audio(request: Request, audio_file: UploadFile = File(...))
         out.write(response.audio_content)
 
     print("Enviando respuesta al frontend...")
-    return {"audio_path": "/static/response.wav"}
+    return {"audio_path": "/static/response.wav", "transcript": transcript, "response_text": response_text}
 
-# Monta el directorio "static" para archivos estáticos
+# Monta el directorio "build" del frontend como archivos estáticos
 app.mount("/", StaticFiles(directory="build", html=True), name="static")
 
 # Obtiene el puerto de la variable de entorno PORT
